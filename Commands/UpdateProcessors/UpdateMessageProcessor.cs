@@ -1,22 +1,59 @@
 using System;
 using PB.ScheduleBot.API;
+using System.Linq;
+using System.Threading.Tasks;
+using PB.ScheduleBot.Services;
 
 namespace PB.ScheduleBot.Commands.UpdateProcessors
 {
     public class UpdateMessageProcessor
     {
-        private TelegramAPI api;
-        private TelegramApiMessage message;
+        private ITelegramAPI api;
 
-        public UpdateMessageProcessor(TelegramAPI api, TelegramApiMessage message)
+        public UpdateMessageProcessor(ITelegramAPI api)
         {
             this.api = api;
-            this.message = message;
         }
 
-        public async void Run()
+        public async Task Run(TelegramApiMessage message)
         {
-            await api.SendMessage(message.chat.id, $"@{message.from.username} Message received.");
+            if (message.chat.type != "private") return; // Only supporting private chats
+
+            TelegramApiMessageEntity command = message.entities?.Where(x => x.type == "bot_command").FirstOrDefault();
+            if (default(TelegramApiMessageEntity) != command)
+            {
+                await ProcessCommand(message, command);
+            }
+            else
+            {
+                await ProcessTextInput(message);
+            }
+        }
+
+        private async Task ProcessCommand(TelegramApiMessage message, TelegramApiMessageEntity command)
+        {
+            string commandText = message.text.Substring(command.offset, command.length).ToLowerInvariant().Split('@')[0];
+            switch (commandText)
+            {
+                case "/start":
+                    await DoStart();
+                    break;
+                default:
+                    await api.SendMessageAsync(message.chat.id, $"That command is currently not supported.");
+                    break;
+            }
+        }
+
+        private async Task ProcessTextInput(TelegramApiMessage message)
+        {
+            await api.SendMessageAsync(message.chat.id, $"Thanks for saying {message.text}");
+        }
+
+        private async Task DoStart()
+        {
+            UserState state = new UserState();
+
+            
         }
     }
 }

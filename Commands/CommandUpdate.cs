@@ -1,30 +1,32 @@
 using System;
 using PB.ScheduleBot.Commands.UpdateProcessors;
 using PB.ScheduleBot.API;
+using System.Threading.Tasks;
 
 namespace PB.ScheduleBot.Commands
 {
-    internal class CommandUpdate
+    public class CommandUpdate
     {
-        private TelegramAPI api;
+        private readonly UpdateMessageProcessor updateMessageProcessor;
+        private readonly UpdateInlineResultProcessor updateInlineResultProcessor;
 
-        public CommandUpdate(TelegramAPI api)
+        public CommandUpdate(UpdateMessageProcessor updateMessageProcessor,
+                             UpdateInlineResultProcessor updateInlineResultProcessor)
         {
-            this.api = api;
+            this.updateMessageProcessor = updateMessageProcessor;
+            this.updateInlineResultProcessor = updateInlineResultProcessor;
         }
 
-        public void Run(TelegramApiUpdate updateData)
+        public async Task Run(TelegramApiUpdate updateData)
         {
             // depending on the type delegate to the correct module
             if (null != updateData.message)
             {
-                var processor = new UpdateMessageProcessor(api, updateData.message);
-                processor.Run();
+                await updateMessageProcessor.Run(updateData.message);
             }
             else if (null != updateData.chosen_inline_result)
             {
-                var processor = new UpdateInlineResultProcessor(api, updateData.chosen_inline_result);
-                processor.Run();
+                await updateInlineResultProcessor.Run(updateData.chosen_inline_result);
             }
         }
     }

@@ -17,20 +17,20 @@ namespace PB.ScheduleBot
         [FunctionName("webhook")]
         public static async Task<IActionResult> Run(
             [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = null)] HttpRequest req,
+            ITelegramAPI api,
             ILogger log,
-            ExecutionContext context)
+            ExecutionContext context,
+            CommandUpdate command)
         {
             string token = req.Query["token"];
-            var api = new TelegramAPI(log, token);
+            await api.SetupAsync(token);
 
             string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
             TelegramApiUpdate updateData = JsonConvert.DeserializeObject<TelegramApiUpdate>(requestBody);
 
             try
             {
-                log.LogInformation($"Update: {requestBody}");
-                var command = new CommandUpdate(api);
-                command.Run(updateData);
+                await command.Run(updateData);
             }
             catch (Exception exception)
             {

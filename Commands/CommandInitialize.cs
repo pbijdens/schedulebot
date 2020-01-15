@@ -12,22 +12,22 @@ using PB.ScheduleBot.API;
 
 namespace PB.ScheduleBot.Commands
 {
-    internal class CommandInitialize
+    public class CommandInitialize
     {
-        private readonly TelegramAPI api;
+        private readonly ITelegramAPI api;
         private readonly ILogger log;
 
-        public CommandInitialize(TelegramAPI api, ILogger log)
+        public CommandInitialize(ITelegramAPI api, ILogger log)
         {
             this.api = api;
             this.log = log;
         }
 
-        public void Run(string baseUrl)
+        public async Task Run(string baseUrl)
         {
             log.LogInformation("Installing webhook for telegram bot with configured token.");
 
-            api.SetWebHook($"{baseUrl}");
+            await api.SetWebHookAsync($"{baseUrl}");
         }
     }
 }

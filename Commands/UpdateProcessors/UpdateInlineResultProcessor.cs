@@ -1,21 +1,20 @@
+using System.Threading.Tasks;
 using PB.ScheduleBot.API;
 
 namespace PB.ScheduleBot.Commands.UpdateProcessors
 {
     public class UpdateInlineResultProcessor
     {
-        private TelegramAPI api;
-        private TelegramApiChosenInlineResult chosenInlineResult;
+        private ITelegramAPI api;
 
-        public UpdateInlineResultProcessor(TelegramAPI api, TelegramApiChosenInlineResult chosenInlineResult)
+        public UpdateInlineResultProcessor(ITelegramAPI api)
         {
             this.api = api;
-            this.chosenInlineResult = chosenInlineResult;
         }
 
-        public void Run()
+        public async Task Run(TelegramApiChosenInlineResult chosenInlineResult)
         {
-
+            await Task.FromResult(0);
         }
     }
 }

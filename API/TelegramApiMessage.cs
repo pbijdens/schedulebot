@@ -9,5 +9,6 @@ namespace PB.ScheduleBot.API
         public TelegramApiMessage reply_to_message;
         public int edit_date { get; set; }
         public string text{ get; set;}
+        public TelegramApiMessageEntity[] entities { get; set;}
     }
 }
