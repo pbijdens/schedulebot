@@ -69,9 +69,13 @@ namespace PB.ScheduleBot.API
 
         public async Task<string> Post(string url, object body)
         {
-            var content = new StringContent(JsonConvert.SerializeObject(body), Encoding.UTF8, "application/json");
+            JsonSerializerSettings settings = new JsonSerializerSettings();
+            settings.NullValueHandling = NullValueHandling.Ignore;
 
-            _logger.LogInformation($"POST {url} WITH BODY {body}");
+            string serializedBody = JsonConvert.SerializeObject(body, settings);
+            var content = new StringContent(serializedBody, Encoding.UTF8, "application/json");
+
+            _logger.LogInformation($"POST {url} WITH BODY {serializedBody}");
 
             var response = _client.PostAsync(url, content).Result;
             var responseBody = await response.Content.ReadAsStringAsync();

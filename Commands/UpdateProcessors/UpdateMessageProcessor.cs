@@ -14,8 +14,9 @@ namespace PB.ScheduleBot.Commands.UpdateProcessors
             this.message = message;
         }
 
-        public void Run()
+        public async void Run()
         {
+            await api.SendMessage(message.chat.id, $"@{message.from.username} Message received.");
         }
     }
 }
