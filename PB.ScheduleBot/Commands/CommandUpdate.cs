@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 
 namespace PB.ScheduleBot.Commands
 {
-    public class CommandUpdate
+    public class CommandUpdate : ICommandUpdate
     {
         private readonly UpdateMessageProcessor updateMessageProcessor;
         private readonly UpdateInlineResultProcessor updateInlineResultProcessor;
@@ -17,16 +17,16 @@ namespace PB.ScheduleBot.Commands
             this.updateInlineResultProcessor = updateInlineResultProcessor;
         }
 
-        public async Task Run(TelegramApiUpdate updateData)
+        public async Task RunAsync(TelegramApiUpdate updateData)
         {
             // depending on the type delegate to the correct module
             if (null != updateData.message)
             {
-                await updateMessageProcessor.Run(updateData.message);
+                await updateMessageProcessor.RunAsync(updateData.message);
             }
             else if (null != updateData.chosen_inline_result)
             {
-                await updateInlineResultProcessor.Run(updateData.chosen_inline_result);
+                await updateInlineResultProcessor.RunAsync(updateData.chosen_inline_result);
             }
         }
     }

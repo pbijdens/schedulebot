@@ -1,18 +1,12 @@
 using System;
 using System.IO;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.Azure.WebJobs;
-using Microsoft.Azure.WebJobs.Extensions.Http;
-using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
-using Microsoft.Extensions.Configuration;
 using PB.ScheduleBot.API;
+using PB.ScheduleBot.Services;
 
 namespace PB.ScheduleBot.Commands
 {
-    public class CommandInitialize
+    public class CommandInitialize : ICommandInitialize
     {
         private readonly ITelegramAPI api;
         private readonly ILogger log;
@@ -23,7 +17,7 @@ namespace PB.ScheduleBot.Commands
             this.log = log;
         }
 
-        public async Task Run(string baseUrl)
+        public async Task RunAsync(string baseUrl)
         {
             log.LogInformation("Installing webhook for telegram bot with configured token.");
 

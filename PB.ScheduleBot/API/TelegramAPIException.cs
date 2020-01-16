@@ -4,7 +4,7 @@ using System.Runtime.Serialization;
 namespace PB.ScheduleBot.API
 {
     [Serializable]
-    internal class TelegramAPIException : Exception
+    public class TelegramAPIException : Exception
     {
         public TelegramAPIException()
         {

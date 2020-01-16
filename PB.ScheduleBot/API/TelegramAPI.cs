@@ -4,8 +4,8 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
+using PB.ScheduleBot.Services;
 
 namespace PB.ScheduleBot.API
 {

@@ -7,32 +7,30 @@ using Microsoft.Azure.WebJobs.Extensions.Http;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
-using Microsoft.Extensions.Configuration;
-using PB.ScheduleBot.Commands;
 using PB.ScheduleBot.API;
+using PB.ScheduleBot.Commands;
 
-namespace PB.ScheduleBot
+namespace TelegramScheduleBotFunctions
 {
     public static class FunctionInitialize
     {
         [FunctionName("initialize")]
         public static async Task<IActionResult> Run(
-            [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = null)] HttpRequest req,
+            [HttpTrigger(AuthorizationLevel.Anonymous, "get", "post", Route = null)] HttpRequest req,
             ITelegramAPI api,
             ILogger log,
             ExecutionContext context,
-            CommandInitialize command
-            )
+            CommandInitialize command)
         {
-            var config = FunctionUtils.GetConfiguration(context);
+            var config = FunctionsUtils.GetConfiguration(context);
             string token = config["Token"];
 
             await api.SetupAsync(token);
-            string baseUrl = FunctionUtils.GetBaseUrl(req);
+            string baseUrl = FunctionsUtils.GetBaseUrl(req);
 
             try
             {
-                await command.Run($"{baseUrl}webhook?token={token}");
+                await command.RunAsync($"{baseUrl}webhook?token={token}");
                 return new OkObjectResult(true);
             }
             catch (TelegramAPIException exception)

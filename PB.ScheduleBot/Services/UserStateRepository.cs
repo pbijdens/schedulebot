@@ -1,5 +1,4 @@
 using System.Threading.Tasks;
-using Microsoft.Extensions.Logging;
 using PB.ScheduleBot.API;
 
 namespace PB.ScheduleBot.Services

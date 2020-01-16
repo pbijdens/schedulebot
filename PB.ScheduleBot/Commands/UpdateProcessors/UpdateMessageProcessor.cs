@@ -6,7 +6,7 @@ using PB.ScheduleBot.Services;
 
 namespace PB.ScheduleBot.Commands.UpdateProcessors
 {
-    public class UpdateMessageProcessor
+    public class UpdateMessageProcessor : IUpdateMessageProcessor
     {
         private ITelegramAPI api;
 
@@ -15,7 +15,7 @@ namespace PB.ScheduleBot.Commands.UpdateProcessors
             this.api = api;
         }
 
-        public async Task Run(TelegramApiMessage message)
+        public async Task RunAsync(TelegramApiMessage message)
         {
             if (message.chat.type != "private") return; // Only supporting private chats
 

@@ -1,12 +1,12 @@
-using System;
+﻿using System;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Extensions;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Extensions.Configuration;
 
-namespace PB.ScheduleBot
+namespace TelegramScheduleBotFunctions
 {
-    public static class FunctionUtils
+    public static class FunctionsUtils
     {
         public static IConfigurationRoot GetConfiguration(ExecutionContext context) => new ConfigurationBuilder()
                             .SetBasePath(context.FunctionAppDirectory)

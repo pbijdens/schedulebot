@@ -7,16 +7,16 @@ using Microsoft.Azure.WebJobs.Extensions.Http;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
-using PB.ScheduleBot.Commands;
 using PB.ScheduleBot.API;
+using PB.ScheduleBot.Commands;
 
-namespace PB.ScheduleBot
+namespace TelegramScheduleBotFunctions
 {
-    public static class HttpTriggerCSharp
+    public static class FunctionWebhook
     {
         [FunctionName("webhook")]
         public static async Task<IActionResult> Run(
-            [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = null)] HttpRequest req,
+            [HttpTrigger(AuthorizationLevel.Anonymous, "get", "post", Route = null)] HttpRequest req,
             ITelegramAPI api,
             ILogger log,
             ExecutionContext context,
@@ -30,7 +30,7 @@ namespace PB.ScheduleBot
 
             try
             {
-                await command.Run(updateData);
+                await command.RunAsync(updateData);
             }
             catch (Exception exception)
             {
@@ -39,7 +39,6 @@ namespace PB.ScheduleBot
             }
 
             return new OkObjectResult(true);
-
         }
     }
 }
