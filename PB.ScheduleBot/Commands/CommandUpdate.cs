@@ -7,11 +7,11 @@ namespace PB.ScheduleBot.Commands
 {
     public class CommandUpdate : ICommandUpdate
     {
-        private readonly UpdateMessageProcessor updateMessageProcessor;
-        private readonly UpdateInlineResultProcessor updateInlineResultProcessor;
+        private readonly IUpdateMessageProcessor updateMessageProcessor;
+        private readonly IUpdateInlineResultProcessor updateInlineResultProcessor;
 
-        public CommandUpdate(UpdateMessageProcessor updateMessageProcessor,
-                             UpdateInlineResultProcessor updateInlineResultProcessor)
+        public CommandUpdate(IUpdateMessageProcessor updateMessageProcessor,
+                             IUpdateInlineResultProcessor updateInlineResultProcessor)
         {
             this.updateMessageProcessor = updateMessageProcessor;
             this.updateInlineResultProcessor = updateInlineResultProcessor;
