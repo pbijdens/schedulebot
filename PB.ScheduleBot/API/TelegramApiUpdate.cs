@@ -2,7 +2,7 @@ namespace PB.ScheduleBot.API
 {
     public class TelegramApiUpdate
     {
-        public int update_id { get; set; }
+        public long update_id { get; set; }
         public TelegramApiMessage message { get; set; }
         public TelegramApiMessage edited_message { get; set; }
         public TelegramApiMessage channel_post { get; set; }

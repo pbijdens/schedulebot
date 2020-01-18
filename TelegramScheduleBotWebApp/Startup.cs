@@ -14,6 +14,7 @@ using PB.ScheduleBot.API;
 using PB.ScheduleBot.Commands;
 using PB.ScheduleBot.Commands.UpdateProcessors;
 using PB.ScheduleBot.Services;
+using PB.ScheduleBot.StateMachines;
 
 namespace TelegramScheduleBotWebApp
 {
@@ -31,20 +32,27 @@ namespace TelegramScheduleBotWebApp
         {
             // Plumbing
             services.AddSingleton<PB.ScheduleBot.Services.ILogger, AspNetCoreLoggerWrapper>();
+            services.AddTransient<IBotConfiguration, AspNetCoreBotConfigurationProvider>();
+            services.AddSingleton<ILockProvider, LockProvider>();
+            
+            // API
             services.AddSingleton<ITelegramAPI, TelegramAPI>();
-            services.AddTransient<IUserStateRepository, UserStateRepository>();
 
-            // Engines and services
+            // Processing engines
             services.AddTransient<IUpdateInlineResultProcessor, UpdateInlineResultProcessor>();
             services.AddTransient<IUpdateMessageProcessor, UpdateMessageProcessor>();
+            services.AddTransient<IUpdateQueryCallbackProcessor, UpdateQueryCallbackProcessor>();
+            services.AddTransient<IUpdateInlineQueryProcessor, UpdateInlineQueryProcessor>();
             services.AddTransient<IMessageService, MessageService>();
+            services.AddTransient<IUserSessionStateMachine, UserSessionStateMachine>();
 
-            // Command handlers
+            // Handlers for Telegram updates
             services.AddTransient<ICommandUpdate, CommandUpdate>();
             services.AddTransient<ICommandInitialize, CommandInitialize>();
 
             // Repositories
-            services.AddTransient<IUserStateRepository, UserStateRepository>();
+            services.AddTransient<IUserStateRepository, FilesystemUserStateRepository>();
+            services.AddTransient<IPollRepository, FilesystemPollRepository>();
 
             services.AddControllers();
         }

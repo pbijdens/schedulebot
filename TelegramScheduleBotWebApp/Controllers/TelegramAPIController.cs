@@ -9,6 +9,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using PB.ScheduleBot.API;
 using PB.ScheduleBot.Commands;
+using PB.ScheduleBot.Services;
 
 namespace TelegramScheduleBotWebApp.Controllers
 {
@@ -17,36 +18,33 @@ namespace TelegramScheduleBotWebApp.Controllers
     public class TelegramAPIController : ControllerBase
     {
         private readonly ILogger<TelegramAPIController> _logger;
-        private readonly IConfiguration _config;
         private readonly ITelegramAPI _api;
         private readonly ICommandInitialize _commandInitialize;
         private readonly ICommandUpdate _commandUpdate;
+        private readonly IBotConfiguration _botConfiguration;
 
         public TelegramAPIController(ILogger<TelegramAPIController> logger,
-            IConfiguration config,
             ITelegramAPI api,
             ICommandInitialize commandInitialize,
-            ICommandUpdate commandUpdate)
+            ICommandUpdate commandUpdate,
+            IBotConfiguration botConfiguration)
         {
             _logger = logger;
-            _config = config;
             _api = api;
             _commandInitialize = commandInitialize;
             _commandUpdate = commandUpdate;
+            _botConfiguration = botConfiguration;
         }
 
         [HttpGet]
         [Route("initialize")]
         public async Task GetInitialize()
         {
-            string token = _config["Token"];
-
-            await _api.SetupAsync(token);
             string baseUrl = GetBaseUrl(Request);
 
             try
             {
-                await _commandInitialize.RunAsync($"{baseUrl}webhook?token={token}");
+                await _commandInitialize.RunAsync($"{baseUrl}webhook?token={_botConfiguration.Token}");
             }
             catch (TelegramAPIException exception)
             {
@@ -59,14 +57,14 @@ namespace TelegramScheduleBotWebApp.Controllers
         [Route("webhook")]
         public async Task PostWebhook([FromQuery] string token, [FromBody] TelegramApiUpdate update)
         {
-            string expectedToken = _config["Token"];
+            // Make sure that the request is authentic
+            string expectedToken = _botConfiguration.Token;
             if (expectedToken != token)
             {
                 throw new UnauthorizedAccessException("No");
             }
 
-            await _api.SetupAsync(token);
-
+            // Process the request
             try
             {
                 await _commandUpdate.RunAsync(update);

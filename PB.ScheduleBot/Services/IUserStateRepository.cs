@@ -1,6 +1,6 @@
 using System.Threading.Tasks;
 using PB.ScheduleBot.API;
-using PB.ScheduleBot.Services;
+using PB.ScheduleBot.Model;
 
 namespace PB.ScheduleBot.Services
 {

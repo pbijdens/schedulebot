@@ -3,22 +3,28 @@ using PB.ScheduleBot.API;
 using System.Linq;
 using System.Threading.Tasks;
 using PB.ScheduleBot.Services;
+using PB.ScheduleBot.Model;
+using System.Collections.Generic;
+using PB.ScheduleBot.StateMachines;
 
 namespace PB.ScheduleBot.Commands.UpdateProcessors
 {
     public class UpdateMessageProcessor : IUpdateMessageProcessor
     {
         private ITelegramAPI api;
-        private readonly IUserStateRepository userStateRepository;
+        private readonly IUserSessionStateMachine sessionStateMachine;
         private readonly IMessageService messageService;
+        private readonly ILogger logger;
 
         public UpdateMessageProcessor(ITelegramAPI api, 
-            IUserStateRepository userStateRepository, 
-            IMessageService messageService)
+            IUserSessionStateMachine sessionStateMachine,
+            IMessageService messageService,
+            ILogger logger)
         {
             this.api = api;
-            this.userStateRepository = userStateRepository;
+            this.sessionStateMachine = sessionStateMachine;
             this.messageService = messageService;
+            this.logger = logger;
         }
 
         public async Task RunAsync(TelegramApiMessage message)
@@ -39,10 +45,21 @@ namespace PB.ScheduleBot.Commands.UpdateProcessors
         private async Task ProcessCommand(TelegramApiMessage message, TelegramApiMessageEntity command)
         {
             string commandText = message.text.Substring(command.offset, command.length).ToLowerInvariant().Split('@')[0];
+            logger.LogInformation($"Processing command {commandText}");
             switch (commandText)
             {
                 case "/start":
-                    await DoStart(message);
+                case "/new":
+                    await sessionStateMachine.CreateNewPollAsync(message.from);
+                    break;
+                case "/help":
+                    await ShowHelp(message.from);
+                    break;
+                case "/list":
+                    await sessionStateMachine.GotoShowListStateAsync(message.from);
+                    break;
+                case "/refresh":
+                    await sessionStateMachine.UpdateUserSessionChatAsync(message.from);
                     break;
                 default:
                     await api.SendMessageAsync(message.chat.id, messageService.CommandNotSupported(commandText));
@@ -52,14 +69,12 @@ namespace PB.ScheduleBot.Commands.UpdateProcessors
 
         private async Task ProcessTextInput(TelegramApiMessage message)
         {
-            await api.SendMessageAsync(message.chat.id, $"Thanks for saying {message.text}");
+            await sessionStateMachine.ProcessTextInputAsync(message.from, message.text);
         }
 
-        private async Task DoStart(TelegramApiMessage message)
+        private async Task ShowHelp(TelegramApiUser from)
         {
-            UserState state = new UserState();
-            await userStateRepository.PutStateAsync(message.from, state);
-            await api.SendMessageAsync(message.chat.id, $"That command is currently not supported.");
+            await api.SendMessageAsync(from.id, messageService.Help());
         }
     }
 }

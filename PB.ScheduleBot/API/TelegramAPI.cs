@@ -13,21 +13,19 @@ namespace PB.ScheduleBot.API
     {
         private static readonly HttpClient _client = new HttpClient();
         private readonly ILogger _logger;
+        private readonly IBotConfiguration _botConfiguration;
         public string _apiURL = "";
 
-        public TelegramAPI(ILogger logger)
+        public TelegramAPI(ILogger logger, IBotConfiguration botConfiguration)
         {
             _client.DefaultRequestHeaders.Accept.Clear();
             _client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
             _logger = logger;
-        }
+            _botConfiguration = botConfiguration;
 
-        public async Task SetupAsync(string token)
-         {
-            _apiURL = $"https://api.telegram.org/bot{token}/";
-            await Task.FromResult(0);
-        } 
+            _apiURL = $"https://api.telegram.org/bot{_botConfiguration.Token}/";
+        }
 
         public async Task SetWebHookAsync(string url)
         {
@@ -48,7 +46,7 @@ namespace PB.ScheduleBot.API
             return result;
         }
 
-        public async Task<TelegramApiMessage> SendMessageAsync(int chat_id, string text, string parse_mode = "HTML", bool? disable_web_page_preview = null, bool? disable_notification = null, int? reply_to_message_id = null, object reply_markup = null)
+        public async Task<TelegramApiMessage> SendMessageAsync(long chat_id, string text, string parse_mode = "HTML", bool? disable_web_page_preview = null, bool? disable_notification = null, int? reply_to_message_id = null, object reply_markup = null)
         {
             return await SendMessageAsync($"{chat_id}", text, parse_mode, disable_web_page_preview, disable_notification, reply_to_message_id, reply_markup);
         }
@@ -60,7 +58,7 @@ namespace PB.ScheduleBot.API
             return result;
         }
 
-        public async Task<TelegramApiMessage> EditMessageTextAsync(int chat_id, string message_id, string text, string parse_mode = "HTML", bool? disable_web_page_preview = null, object reply_markup = null)
+        public async Task<TelegramApiMessage> EditMessageTextAsync(long chat_id, string message_id, string text, string parse_mode = "HTML", bool? disable_web_page_preview = null, object reply_markup = null)
         {
             return await EditMessageTextAsync(chat_id, message_id, text, parse_mode, disable_web_page_preview, reply_markup);
         }
@@ -71,6 +69,17 @@ namespace PB.ScheduleBot.API
             TelegramApiMessage result = JsonConvert.DeserializeObject<TelegramApiMessage>(postResult);
             return result;
         }
+
+        public async Task AnswerInlineQueryAsync(string inline_query_id, TelegramApiInlineQueryResult[] results, int? cache_time = null, bool? is_personal = null, string next_offset = null, string switch_pm_text = null, string switch_pm_parameter = null)
+        {
+            await PostAsync($"{_apiURL}answerInlineQuery", new { inline_query_id, results, cache_time, is_personal, next_offset, switch_pm_text, switch_pm_parameter });
+        }
+
+        public async Task AnswerCallbackQuery(string callback_query_id, string text = null, bool? show_alert = null, string url = null, int? cache_time = null)
+        {
+            await PostAsync($"{_apiURL}answerCallbackQuery", new { callback_query_id, text, show_alert, url, cache_time });
+        }
+
 
         public async Task<string> PostAsync(string url, object body)
         {

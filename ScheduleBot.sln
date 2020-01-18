@@ -3,8 +3,6 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 16
 VisualStudioVersion = 16.0.29613.14
 MinimumVisualStudioVersion = 15.0.26124.0
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TelegramScheduleBotFunctions", "TelegramScheduleBotFunctions\TelegramScheduleBotFunctions.csproj", "{8DF6C6D2-4988-4B23-9552-B6FFAB38F1B3}"
-EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PB.ScheduleBot", "PB.ScheduleBot\PB.ScheduleBot.csproj", "{074B39F1-8D2A-48B6-95B0-161E8125F6D4}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TelegramScheduleBotWebApp", "TelegramScheduleBotWebApp\TelegramScheduleBotWebApp.csproj", "{67B4DD1A-13C4-4EA2-8BBD-AA82B689B968}"
@@ -25,18 +23,6 @@ Global
 		Release|x86 = Release|x86
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{8DF6C6D2-4988-4B23-9552-B6FFAB38F1B3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{8DF6C6D2-4988-4B23-9552-B6FFAB38F1B3}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{8DF6C6D2-4988-4B23-9552-B6FFAB38F1B3}.Debug|x64.ActiveCfg = Debug|Any CPU
-		{8DF6C6D2-4988-4B23-9552-B6FFAB38F1B3}.Debug|x64.Build.0 = Debug|Any CPU
-		{8DF6C6D2-4988-4B23-9552-B6FFAB38F1B3}.Debug|x86.ActiveCfg = Debug|Any CPU
-		{8DF6C6D2-4988-4B23-9552-B6FFAB38F1B3}.Debug|x86.Build.0 = Debug|Any CPU
-		{8DF6C6D2-4988-4B23-9552-B6FFAB38F1B3}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{8DF6C6D2-4988-4B23-9552-B6FFAB38F1B3}.Release|Any CPU.Build.0 = Release|Any CPU
-		{8DF6C6D2-4988-4B23-9552-B6FFAB38F1B3}.Release|x64.ActiveCfg = Release|Any CPU
-		{8DF6C6D2-4988-4B23-9552-B6FFAB38F1B3}.Release|x64.Build.0 = Release|Any CPU
-		{8DF6C6D2-4988-4B23-9552-B6FFAB38F1B3}.Release|x86.ActiveCfg = Release|Any CPU
-		{8DF6C6D2-4988-4B23-9552-B6FFAB38F1B3}.Release|x86.Build.0 = Release|Any CPU
 		{074B39F1-8D2A-48B6-95B0-161E8125F6D4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{074B39F1-8D2A-48B6-95B0-161E8125F6D4}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{074B39F1-8D2A-48B6-95B0-161E8125F6D4}.Debug|x64.ActiveCfg = Debug|Any CPU

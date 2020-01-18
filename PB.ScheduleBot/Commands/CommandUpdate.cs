@@ -10,14 +10,20 @@ namespace PB.ScheduleBot.Commands
     {
         private readonly IUpdateMessageProcessor updateMessageProcessor;
         private readonly IUpdateInlineResultProcessor updateInlineResultProcessor;
+        private readonly IUpdateQueryCallbackProcessor updateQueryCallbackProcessor;
+        private readonly IUpdateInlineQueryProcessor updateInlineQueryProcessor;
         private readonly ILogger logger;
 
         public CommandUpdate(IUpdateMessageProcessor updateMessageProcessor,
                              IUpdateInlineResultProcessor updateInlineResultProcessor,
+                             IUpdateQueryCallbackProcessor updateQueryCallbackProcessor,
+                             IUpdateInlineQueryProcessor updateInlineQueryProcessor,
                              ILogger logger)
         {
             this.updateMessageProcessor = updateMessageProcessor;
             this.updateInlineResultProcessor = updateInlineResultProcessor;
+            this.updateQueryCallbackProcessor = updateQueryCallbackProcessor;
+            this.updateInlineQueryProcessor = updateInlineQueryProcessor;
             this.logger = logger;
         }
 
@@ -33,6 +39,16 @@ namespace PB.ScheduleBot.Commands
             else if (null != updateData.chosen_inline_result)
             {
                 await updateInlineResultProcessor.RunAsync(updateData.chosen_inline_result);
+            }
+            else if (null != updateData.callback_query)
+            {
+                // answer to a callback button
+                await updateQueryCallbackProcessor.RunAsync(updateData.callback_query);
+            }
+            else if (null != updateData.inline_query)
+            {
+                // inline query
+                await updateInlineQueryProcessor.RunAsync(updateData.inline_query);
             }
         }
     }
