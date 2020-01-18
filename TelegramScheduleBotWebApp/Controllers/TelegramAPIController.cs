@@ -66,7 +66,6 @@ namespace TelegramScheduleBotWebApp.Controllers
             }
 
             await _api.SetupAsync(token);
-            string baseUrl = GetBaseUrl(Request);
 
             try
             {
@@ -79,11 +78,17 @@ namespace TelegramScheduleBotWebApp.Controllers
             }
         }
 
-        public static string GetBaseUrl(HttpRequest req)
+        public string GetBaseUrl(HttpRequest req)
         {
             string encodedUrl = req.GetEncodedUrl();
             int indexOfLastSlash = encodedUrl.LastIndexOf('/');
-            return indexOfLastSlash < 0 ? encodedUrl : encodedUrl.Substring(0, indexOfLastSlash + 1);
+            string baseUrl = indexOfLastSlash < 0 ? encodedUrl : encodedUrl.Substring(0, indexOfLastSlash + 1);
+            if (baseUrl.StartsWith("http://"))
+            {
+                // force the URL to use https
+                baseUrl = "https" + baseUrl.Substring(4);
+            }
+            return baseUrl;
         }
     }
 }

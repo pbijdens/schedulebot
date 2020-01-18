@@ -34,13 +34,17 @@ namespace TelegramScheduleBotWebApp
             services.AddSingleton<ITelegramAPI, TelegramAPI>();
             services.AddTransient<IUserStateRepository, UserStateRepository>();
 
-            // Engines
+            // Engines and services
             services.AddTransient<IUpdateInlineResultProcessor, UpdateInlineResultProcessor>();
             services.AddTransient<IUpdateMessageProcessor, UpdateMessageProcessor>();
+            services.AddTransient<IMessageService, MessageService>();
 
             // Command handlers
             services.AddTransient<ICommandUpdate, CommandUpdate>();
             services.AddTransient<ICommandInitialize, CommandInitialize>();
+
+            // Repositories
+            services.AddTransient<IUserStateRepository, UserStateRepository>();
 
             services.AddControllers();
         }

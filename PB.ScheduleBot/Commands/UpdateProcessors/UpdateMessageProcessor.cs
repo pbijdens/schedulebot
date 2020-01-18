@@ -9,10 +9,16 @@ namespace PB.ScheduleBot.Commands.UpdateProcessors
     public class UpdateMessageProcessor : IUpdateMessageProcessor
     {
         private ITelegramAPI api;
+        private readonly IUserStateRepository userStateRepository;
+        private readonly IMessageService messageService;
 
-        public UpdateMessageProcessor(ITelegramAPI api)
+        public UpdateMessageProcessor(ITelegramAPI api, 
+            IUserStateRepository userStateRepository, 
+            IMessageService messageService)
         {
             this.api = api;
+            this.userStateRepository = userStateRepository;
+            this.messageService = messageService;
         }
 
         public async Task RunAsync(TelegramApiMessage message)
@@ -36,10 +42,10 @@ namespace PB.ScheduleBot.Commands.UpdateProcessors
             switch (commandText)
             {
                 case "/start":
-                    await DoStart();
+                    await DoStart(message);
                     break;
                 default:
-                    await api.SendMessageAsync(message.chat.id, $"That command is currently not supported.");
+                    await api.SendMessageAsync(message.chat.id, messageService.CommandNotSupported(commandText));
                     break;
             }
         }
@@ -49,11 +55,11 @@ namespace PB.ScheduleBot.Commands.UpdateProcessors
             await api.SendMessageAsync(message.chat.id, $"Thanks for saying {message.text}");
         }
 
-        private async Task DoStart()
+        private async Task DoStart(TelegramApiMessage message)
         {
             UserState state = new UserState();
-
-            
+            await userStateRepository.PutStateAsync(message.from, state);
+            await api.SendMessageAsync(message.chat.id, $"That command is currently not supported.");
         }
     }
 }
