@@ -1,4 +1,5 @@
 ﻿using PB.ScheduleBot.API;
+using PB.ScheduleBot.Services;
 using PB.ScheduleBot.Utils;
 using System;
 using System.Collections.Generic;
@@ -58,18 +59,22 @@ namespace PB.ScheduleBot.Model
             return result;
         }
 
-        public String ConstructMessageText()
+        public String ConstructMessageText(IMessageService messages)
         {
             StringBuilder messageBuilder = new StringBuilder();
 
             string subject = Subject;
-            if (string.IsNullOrWhiteSpace(subject)) subject = "No subject was set for this this (yet)";
+            if (string.IsNullOrWhiteSpace(subject)) subject = messages.PollMessageNoSubjectText().HtmlSafe();
             messageBuilder.AppendLine($"<b>{subject.HtmlSafe()}</b>");
-            messageBuilder.AppendLine($"<i>{PollTypeAsString(Type)}</i>");
+            messageBuilder.AppendLine($"<i>{PollTypeAsString(messages, Type)}</i>");
+            if (IsClosed)
+            {
+                messageBuilder.AppendLine($"<b>{messages.PollMessagePollIsClosed().HtmlSafe()}</b>");
+            }
             messageBuilder.AppendLine($"");
             if (null == VoteOptions || VoteOptions.Count == 0)
             {
-                messageBuilder.AppendLine($"Vote options have not been set up for this poll yet.");
+                messageBuilder.AppendLine($"{messages.PollMessagePollHasNoVotingOptions().HtmlSafe()}");
             }
             else
             {
@@ -86,7 +91,6 @@ namespace PB.ScheduleBot.Model
                     }
                     else
                     {
-                        //messageBuilder.AppendLine($"<i>No votes yet.</i>");
                         messageBuilder.AppendLine($"");
                     }
                 }
@@ -95,7 +99,7 @@ namespace PB.ScheduleBot.Model
             return messageBuilder.ToString();
         }
 
-        public TelegramApiInlineKeyboardMarkup ConstructInlineKeyboard()
+        public TelegramApiInlineKeyboardMarkup ConstructInlineKeyboard(IMessageService messages)
         {
             List<TelegramApiInlineKeyboardButton[]> buttonRows = new List<TelegramApiInlineKeyboardButton[]>();
 
@@ -107,7 +111,7 @@ namespace PB.ScheduleBot.Model
                     buttonRows.Add(new TelegramApiInlineKeyboardButton[] {
                     new TelegramApiInlineKeyboardButton {
                             callback_data = $"edit.{ID}.reopen",
-                            text = "↩️ Re-open this poll",
+                            text = $"{messages.ButtonReopen()}",
                         }
                     });
                 }
@@ -117,11 +121,11 @@ namespace PB.ScheduleBot.Model
                         new TelegramApiInlineKeyboardButton[] {
                             new TelegramApiInlineKeyboardButton {
                                 callback_data = $"edit.{ID}.subject",
-                                text = "✏️ Subject",
+                                text = $"{messages.ButtonEditSubject()}",
                             },
                             new TelegramApiInlineKeyboardButton {
                                 callback_data = $"edit.{ID}.type",
-                                text = "✏️ Type",
+                                text = $"{messages.ButtonEditType()}",
                             },
                         }
                     });
@@ -131,21 +135,21 @@ namespace PB.ScheduleBot.Model
                         buttonRows.Add(new TelegramApiInlineKeyboardButton[] {
                             new TelegramApiInlineKeyboardButton {
                                 callback_data = $"edit.{ID}.add-voting-option",
-                                text = "➕ Option",
+                                text = $"{messages.ButtonAddOption()}",
                             },
                             new TelegramApiInlineKeyboardButton {
                                 callback_data = $"edit.{ID}.remove-voting-option",
-                                text = "➖ Option",
+                                text = $"{messages.ButtonDeleteOption()}",
                             },
                             new TelegramApiInlineKeyboardButton {
                                 callback_data = $"edit.{ID}.rename-voting-option",
-                                text = "✏️ Option",
+                                text = $"{messages.ButtonEditOption()}",
                             },
                         });
                         buttonRows.Add(new TelegramApiInlineKeyboardButton[] {
                             new TelegramApiInlineKeyboardButton {
                                 switch_inline_query = $"{ID}",
-                                text = "Share",
+                                text = $"{messages.ButtonShare()}",
                             },
                      });
                     }
@@ -154,7 +158,7 @@ namespace PB.ScheduleBot.Model
                         buttonRows.Add(new TelegramApiInlineKeyboardButton[] {
                             new TelegramApiInlineKeyboardButton {
                                 callback_data = $"edit.{ID}.add-voting-option",
-                                text = "➕ Option",
+                                text = $"{messages.ButtonAddOption()}",
                             },
                         });
                     }
@@ -162,7 +166,7 @@ namespace PB.ScheduleBot.Model
                     buttonRows.Add(new TelegramApiInlineKeyboardButton[] {
                         new TelegramApiInlineKeyboardButton {
                             callback_data = $"edit.{ID}.close",
-                            text = "🚫 Close",
+                            text = $"{messages.ButtonClose()}",
                         },
                     });
                 }
@@ -170,19 +174,19 @@ namespace PB.ScheduleBot.Model
                     new TelegramApiInlineKeyboardButton
                     {
                         callback_data = $"edit.{ID}.delete",
-                        text = "🗑 Delete",
+                        text = $"{messages.ButtonDelete()}",
                     },
                     new TelegramApiInlineKeyboardButton
                     {
                         callback_data = $"edit.{ID}.clone",
-                        text = "♻️ Clone",
+                        text = $"{messages.ButtonClone()}",
                     },
                 });
             }
             buttonRows.Add(new TelegramApiInlineKeyboardButton[] {
                 new TelegramApiInlineKeyboardButton {
                         callback_data = $"list",
-                        text = "🔙 Back to the list",
+                        text = $"{messages.ButtonBackToList()}",
                     }
                 });
 
@@ -215,7 +219,7 @@ namespace PB.ScheduleBot.Model
             row.Add(button);
         }
 
-        public TelegramApiInlineKeyboardMarkup ConstructVotingKeyboard()
+        public TelegramApiInlineKeyboardMarkup ConstructVotingKeyboard(IMessageService messages)
         {
             List<List<TelegramApiInlineKeyboardButton>> buttonRows = new List<List<TelegramApiInlineKeyboardButton>>();
 
@@ -233,7 +237,7 @@ namespace PB.ScheduleBot.Model
             AddButton(buttonRows, new TelegramApiInlineKeyboardButton
             {
                 callback_data = $"refresh.{ID}",
-                text = $"🔄 Refresh"
+                text = $"{messages.ButtonRefresh()}"
             });
 
             TelegramApiInlineKeyboardMarkup markup = new TelegramApiInlineKeyboardMarkup
@@ -256,15 +260,15 @@ namespace PB.ScheduleBot.Model
             }
         }
 
-        private string PollTypeAsString(PollType type)
+        private string PollTypeAsString(IMessageService messages, PollType type)
         {
             switch (type)
             {
                 case PollType.Multiple:
-                    return "Select one or more of the following options";
+                    return messages.PollMessageSelectMultiple().HtmlSafe();
                 case PollType.Single:
                 default:
-                    return "Select one of the following options";
+                    return messages.PollMessageSelectOne().HtmlSafe();
             }
         }
     }

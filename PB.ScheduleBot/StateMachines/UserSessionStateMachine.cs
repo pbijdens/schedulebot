@@ -122,13 +122,13 @@ namespace PB.ScheduleBot.StateMachines
                     await AskForPollOptionNewName(user);
                     break;
                 case UserState.States.ClosePoll:
-                    await AskForConfirmation("Are you sure you want to close this poll?", "close", user, state.ActivePollID);
+                    await AskForConfirmation(messageService.ConfirmClosePoll(), "close", user, state.ActivePollID);
                     break;
                 case UserState.States.DeletePoll:
-                    await AskForConfirmation("Are you sure you want to delete this poll?", "delete", user, state.ActivePollID);
+                    await AskForConfirmation(messageService.ConfirmDeletePoll(), "delete", user, state.ActivePollID);
                     break;
                 case UserState.States.ClonePoll:
-                    await AskForConfirmation("Cloning will duplicate the poll and generates an identical poll without any votes. Are you sure you want to do this?", "clone", user, state.ActivePollID);
+                    await AskForConfirmation(messageService.ConfirmClonePoll(), "clone", user, state.ActivePollID);
                     break;
             }
         }
@@ -141,11 +141,11 @@ namespace PB.ScheduleBot.StateMachines
                     new TelegramApiInlineKeyboardButton[] {
                         new TelegramApiInlineKeyboardButton {
                             callback_data = $"edit.{pollID}.confirmed-{command}.true",
-                            text = "Yes"
+                            text = messageService.ConfirmYes()
                         },
                         new TelegramApiInlineKeyboardButton {
                             callback_data = $"edit.{pollID}.confirmed-{command}.false",
-                            text = "No"
+                            text = messageService.ConfirmNo()
                         },
                     }
                 }
@@ -284,11 +284,11 @@ namespace PB.ScheduleBot.StateMachines
                     new TelegramApiInlineKeyboardButton[] {
                         new TelegramApiInlineKeyboardButton {
                             callback_data = $"edit.{pollID}.set-type.{(int)Poll.PollType.Single}",
-                            text = "Select one"
+                            text = messageService.ButtonChooseSelectOne()
                         },
                         new TelegramApiInlineKeyboardButton {
                             callback_data = $"edit.{pollID}.set-type.{(int)Poll.PollType.Multiple}",
-                            text = "Select multiple"
+                            text = messageService.ButtonChooseSelectMultiple()
                         },
                     }
                 }
@@ -354,7 +354,7 @@ namespace PB.ScheduleBot.StateMachines
                     await ProcessNewCallbackQueryAsync(callback);
                     break;
                 default:
-                    await api.AnswerCallbackQuery(callback.id, "Something went wrong...", true);
+                    await api.AnswerCallbackQuery(callback.id, messageService.ErrorSomethingWentWrong(), true);
                     logger.LogError($"Callback query '{callback.data}' is not supported.");
                     break;
             }
@@ -395,7 +395,7 @@ namespace PB.ScheduleBot.StateMachines
             else
             {
                 logger.LogError($"Callback query '{callback.data}' leads to non-existing poll.");
-                await api.AnswerCallbackQuery(callback.id, "This poll does not exist anymore.", true);
+                await api.AnswerCallbackQuery(callback.id, messageService.ErrorPollDoesNotExist(), true);
             }
         }
 
@@ -409,7 +409,7 @@ namespace PB.ScheduleBot.StateMachines
             }
             else
             {
-                await api.AnswerCallbackQuery(callback.id, "This poll does not exist (anymore).", true);
+                await api.AnswerCallbackQuery(callback.id, messageService.ErrorPollDoesNotExist(), true);
             }
             await UpdateUserChatSessionForStateAsync(callback.from);
         }
@@ -577,9 +577,9 @@ namespace PB.ScheduleBot.StateMachines
                 return;
             }
 
-            string messageBuilder = poll.ConstructMessageText();
+            string messageBuilder = poll.ConstructMessageText(messageService);
 
-            TelegramApiInlineKeyboardMarkup markup = poll.ConstructInlineKeyboard();
+            TelegramApiInlineKeyboardMarkup markup = poll.ConstructInlineKeyboard(messageService);
             if (null == state.LastSentStateMessage)
             {
                 var currentMessage = await api.SendMessageAsync(user.id, messageBuilder, "HTML", null, null, null, markup);
@@ -631,7 +631,7 @@ namespace PB.ScheduleBot.StateMachines
                         new TelegramApiInlineKeyboardButton
                         {
                             callback_data = $"new",
-                            text = $"➕ Add a new poll",
+                            text = messageService.ButtonAddPoll(),
                         }
                     });
                 TelegramApiInlineKeyboardMarkup markup = new TelegramApiInlineKeyboardMarkup

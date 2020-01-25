@@ -43,7 +43,7 @@ namespace TelegramScheduleBotWebApp
             services.AddTransient<IUpdateMessageProcessor, UpdateMessageProcessor>();
             services.AddTransient<IUpdateQueryCallbackProcessor, UpdateQueryCallbackProcessor>();
             services.AddTransient<IUpdateInlineQueryProcessor, UpdateInlineQueryProcessor>();
-            services.AddTransient<IMessageService, MessageService>();
+            services.AddTransient<IMessageService, MessageServiceDutch>();
             services.AddTransient<IUserSessionStateMachine, UserSessionStateMachine>();
             services.AddSingleton<IVotingEngine, VotingEngine>();
 

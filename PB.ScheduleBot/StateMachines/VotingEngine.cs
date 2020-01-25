@@ -94,7 +94,7 @@ namespace PB.ScheduleBot.StateMachines
 
         private async Task Refresh(string inlineMessageID, Poll poll)
         {
-            await api.EditInlineMessageTextAsync(inlineMessageID, poll.ConstructMessageText(), "HTML", true, poll.ConstructVotingKeyboard());
+            await api.EditInlineMessageTextAsync(inlineMessageID, poll.ConstructMessageText(messageService), "HTML", true, poll.ConstructVotingKeyboard(messageService));
         }
 
         private async Task ProcessVoteActionWhileLocked(TelegramApiCallbackQuery callback, TelegramApiUser user, string inlineMessageID, Poll poll, string optionID)

@@ -14,16 +14,19 @@ namespace PB.ScheduleBot.Commands.UpdateProcessors
         private readonly IPollRepository pollRepository;
         private readonly IUserStateRepository userStateRepository;
         private readonly ILogger logger;
+        private readonly IMessageService messageService;
 
         public UpdateInlineQueryProcessor(ITelegramAPI api,
             IPollRepository pollRepository,
             IUserStateRepository userStateRepository,
-            ILogger logger)
+            ILogger logger,
+            IMessageService messageService)
         {
             this.api = api;
             this.pollRepository = pollRepository;
             this.userStateRepository = userStateRepository;
             this.logger = logger;
+            this.messageService = messageService;
         }
 
         public async Task RunAsync(TelegramApiInlineQuery inlineQuery)
@@ -66,7 +69,7 @@ namespace PB.ScheduleBot.Commands.UpdateProcessors
             await api.AnswerInlineQueryAsync(inlineQuery.id, results.ToArray(), 30, is_personal: true);
         }
 
-        private static void AddPollToInlineQuery(List<TelegramApiInlineQueryResult> results, Model.Poll poll)
+        private void AddPollToInlineQuery(List<TelegramApiInlineQueryResult> results, Model.Poll poll)
         {
             results.Add(new TelegramApiInlineQueryResult
             {
@@ -76,9 +79,9 @@ namespace PB.ScheduleBot.Commands.UpdateProcessors
                 {
                     disable_web_page_preview = true,
                     parse_mode = "HTML",
-                    message_text = poll.ConstructMessageText().ToString()
+                    message_text = poll.ConstructMessageText(messageService).ToString()
                 },
-                reply_markup = poll.ConstructVotingKeyboard(),
+                reply_markup = poll.ConstructVotingKeyboard(messageService),
                 title = poll.Subject,
             });
         }
