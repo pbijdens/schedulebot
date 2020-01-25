@@ -49,12 +49,12 @@ namespace PB.ScheduleBot.Commands.UpdateProcessors
                 var state = await userStateRepository.GetStateAsync(inlineQuery.from);
                 if (null != state && state.OwnedPolls != null)
                 {
-                    var polls = state.OwnedPolls;
+                    var polls = new List<string>(state.OwnedPolls.ToArray());
                     polls.Reverse();
-                    foreach (var pollID in polls.Take(10))
+                    foreach (var pollID in polls.Take(10)) // 10 most recent, because of reverse :-)
                     {
                         var poll = await pollRepository.LoadAsync(pollID);
-                        if (null != poll && !poll.IsClosed)
+                        if (null != poll && !poll.IsClosed && !poll.IsDeleted)
                         {
                             logger.LogInformation($"Adding '{poll.Subject}' ({poll.ID})");
                             AddPollToInlineQuery(results, poll);
@@ -76,9 +76,9 @@ namespace PB.ScheduleBot.Commands.UpdateProcessors
                 {
                     disable_web_page_preview = true,
                     parse_mode = "HTML",
-                    message_text = "Dit is een test"
+                    message_text = poll.ConstructMessageText().ToString()
                 },
-                reply_markup = null,
+                reply_markup = poll.ConstructVotingKeyboard(),
                 title = poll.Subject,
             });
         }

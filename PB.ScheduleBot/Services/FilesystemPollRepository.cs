@@ -41,6 +41,9 @@ namespace PB.ScheduleBot.Services
 
         public async Task<Poll> SaveAsync(Poll poll)
         {
+            if (null == poll) poll = new Poll();
+            poll.ModificationDate = DateTimeOffset.UtcNow;
+
             log.LogInformation($"Save poll: '{JsonConvert.SerializeObject(poll)}'");
             string path = CalculatePath(poll.ID);
             try

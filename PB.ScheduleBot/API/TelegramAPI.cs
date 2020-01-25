@@ -42,8 +42,8 @@ namespace PB.ScheduleBot.API
         public async Task<TelegramApiMessage> SendMessageAsync(string chat_id, string text, string parse_mode = "HTML", bool? disable_web_page_preview = null, bool? disable_notification = null, int? reply_to_message_id = null, object reply_markup = null)
         {
             string postResult = await PostAsync($"{_apiURL}sendMessage", new { chat_id, text, parse_mode, disable_web_page_preview, disable_notification, reply_to_message_id, reply_markup });
-            TelegramApiMessage result = JsonConvert.DeserializeObject<TelegramApiMessage>(postResult);
-            return result;
+            var result = JsonConvert.DeserializeObject<TelegramApiResult<TelegramApiMessage>>(postResult);
+            return result?.result;
         }
 
         public async Task<TelegramApiMessage> SendMessageAsync(long chat_id, string text, string parse_mode = "HTML", bool? disable_web_page_preview = null, bool? disable_notification = null, int? reply_to_message_id = null, object reply_markup = null)
@@ -54,20 +54,18 @@ namespace PB.ScheduleBot.API
         public async Task<TelegramApiMessage> EditMessageTextAsync(string chat_id, string message_id, string text, string parse_mode = "HTML", bool? disable_web_page_preview = null, object reply_markup = null)
         {
             string postResult = await PostAsync($"{_apiURL}editMessageText", new { chat_id, message_id, text, parse_mode, disable_web_page_preview, reply_markup });
-            TelegramApiMessage result = JsonConvert.DeserializeObject<TelegramApiMessage>(postResult);
-            return result;
+            var result = JsonConvert.DeserializeObject<TelegramApiResult<TelegramApiMessage>>(postResult);
+            return result?.result;
         }
 
         public async Task<TelegramApiMessage> EditMessageTextAsync(long chat_id, string message_id, string text, string parse_mode = "HTML", bool? disable_web_page_preview = null, object reply_markup = null)
         {
-            return await EditMessageTextAsync(chat_id, message_id, text, parse_mode, disable_web_page_preview, reply_markup);
+            return await EditMessageTextAsync($"{chat_id}", message_id, text, parse_mode, disable_web_page_preview, reply_markup);
         }
         
-        public async Task<TelegramApiMessage> EditInlineMessageTextAsync(string inline_message_id, string text, string parse_mode = "HTML", bool? disable_web_page_preview = null, object reply_markup = null)
+        public async Task EditInlineMessageTextAsync(string inline_message_id, string text, string parse_mode = "HTML", bool? disable_web_page_preview = null, object reply_markup = null)
         {
-            string postResult = await PostAsync($"{_apiURL}editMessageText", new { inline_message_id, text, parse_mode, disable_web_page_preview, reply_markup });
-            TelegramApiMessage result = JsonConvert.DeserializeObject<TelegramApiMessage>(postResult);
-            return result;
+            await PostAsync($"{_apiURL}editMessageText", new { inline_message_id, text, parse_mode, disable_web_page_preview, reply_markup });
         }
 
         public async Task AnswerInlineQueryAsync(string inline_query_id, TelegramApiInlineQueryResult[] results, int? cache_time = null, bool? is_personal = null, string next_offset = null, string switch_pm_text = null, string switch_pm_parameter = null)
@@ -80,6 +78,17 @@ namespace PB.ScheduleBot.API
             await PostAsync($"{_apiURL}answerCallbackQuery", new { callback_query_id, text, show_alert, url, cache_time });
         }
 
+        public async Task DeleteMessageForChatAsync(long chat_id, long message_id)
+        {
+            try
+            {
+                await PostAsync($"{_apiURL}deleteMessage", new { chat_id, message_id });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Ffailed to delete message with ID {message_id} from chat {chat_id}");
+            }
+        }
 
         public async Task<string> PostAsync(string url, object body)
         {

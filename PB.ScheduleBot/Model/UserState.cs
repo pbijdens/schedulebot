@@ -1,3 +1,4 @@
+using PB.ScheduleBot.API;
 using System.Collections.Generic;
 
 namespace PB.ScheduleBot.Model
@@ -14,6 +15,9 @@ namespace PB.ScheduleBot.Model
             RemoveVotingOption,
             RenameVotingOption,
             AskForPollOptionNewName,
+            DeletePoll,
+            ClosePoll,
+            ClonePoll
         }
 
         public UserState()
@@ -24,5 +28,8 @@ namespace PB.ScheduleBot.Model
         public List<string> OwnedPolls { get; set; }
         public string ActivePollID { get; set; }
         public string ActionData { get; set; }
+        public TelegramApiMessage LastSentConfirmationMessage { get; set; }
+        public TelegramApiMessage LastSentStateMessage { get; set; }
+        public List<TelegramApiMessage> RegisteredPrompts { get; set; }
     }
 }

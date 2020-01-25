@@ -1,6 +1,7 @@
 ﻿using PB.ScheduleBot.API;
 using PB.ScheduleBot.Model;
 using PB.ScheduleBot.Services;
+using PB.ScheduleBot.Utils;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -33,9 +34,11 @@ namespace PB.ScheduleBot.StateMachines
             this.logger = logger;
         }
 
-        public async Task ProcessTextInputAsync(TelegramApiUser user, string message)
+        public async Task ProcessTextInputAsync(TelegramApiUser user, long messageID, string message)
         {
+            await DeletePromptsAsync(user);
             UserState state = await GetUserStateFor(user);
+            logger.LogInformation($"Processing text input for user {user.id}'s in session state state {state.State}.");
             switch (state.State)
             {
                 case UserState.States.EditSubject:
@@ -43,6 +46,7 @@ namespace PB.ScheduleBot.StateMachines
                     {
                         poll.Subject = message;
                     });
+                    await api.DeleteMessageForChatAsync(user.id, messageID); // delete the user input
                     await GotoStateAsync(user, UserState.States.EditActivePoll);
                     break;
                 case UserState.States.AskForPollOptionNewName:
@@ -54,6 +58,7 @@ namespace PB.ScheduleBot.StateMachines
                             option.Text = message;
                         }
                     });
+                    await api.DeleteMessageForChatAsync(user.id, messageID); // delete the user input
                     await GotoStateAsync(user, UserState.States.EditActivePoll);
                     break;
                 case UserState.States.AddVotingOption:
@@ -61,47 +66,35 @@ namespace PB.ScheduleBot.StateMachines
                     {
                         poll.VoteOptions.Add(new Poll.VoteOption
                         {
-                            ID = shortid.ShortId.Generate(true, false, 12),
                             Text = message,
                             Votes = new List<TelegramApiUser>()
                         });
                     });
+                    await api.DeleteMessageForChatAsync(user.id, messageID); // delete the user input
                     await GotoStateAsync(user, UserState.States.EditActivePoll);
                     break;
                 default:
+                    await ResetPrivateMessageHistory(user);
                     await api.SendMessageAsync(user.id, messageService.InputUnexpected());
                     break;
             }
         }
 
-        public async Task CreateNewPollAsync(TelegramApiUser user)
+        public async Task ResetPrivateMessageHistory(TelegramApiUser user)
         {
-            logger.LogInformation("Creating new poll...");
-            var sem = lockProvider.GetLockFor($"state-{user.id}");
-            sem.WaitOne();
-            try
+            await RunStateActionLockedAsync(user, st =>
             {
-                logger.LogInformation("Obtained the lock for the user...");
-                // Create a new poll
-                var poll = await pollRepository.SaveAsync(new Poll());
-
-                // Register the poll for the user
-                UserState state = await GetUserStateFor(user);
-                state.State = UserState.States.EditActivePoll;
-                state.ActivePollID = poll.ID;
-                state.OwnedPolls.Add(poll.ID);
-                await userStateRepository.PutStateAsync(user, state);
-            }
-            finally
-            {
-                sem.Release();
-            }
-            await UpdateUserSessionChatAsync(user);
+                // There was text input that we could not process, so we do not update or delete the last sent messages we simply start from scratch
+                st.LastSentConfirmationMessage = null;
+                st.LastSentStateMessage = null;
+                st.RegisteredPrompts = new List<TelegramApiMessage>();
+            });
         }
 
-        public async Task UpdateUserSessionChatAsync(TelegramApiUser user)
+        public async Task UpdateUserChatSessionForStateAsync(TelegramApiUser user)
         {
             UserState state = await GetUserStateFor(user);
+            logger.LogInformation($"Updating user {user.id}'s chat session for state {state.State}.");
             switch (state.State)
             {
                 case UserState.States.EditActivePoll:
@@ -128,7 +121,99 @@ namespace PB.ScheduleBot.StateMachines
                 case UserState.States.AskForPollOptionNewName:
                     await AskForPollOptionNewName(user);
                     break;
+                case UserState.States.ClosePoll:
+                    await AskForConfirmation("Are you sure you want to close this poll?", "close", user, state.ActivePollID);
+                    break;
+                case UserState.States.DeletePoll:
+                    await AskForConfirmation("Are you sure you want to delete this poll?", "delete", user, state.ActivePollID);
+                    break;
+                case UserState.States.ClonePoll:
+                    await AskForConfirmation("Cloning will duplicate the poll and generates an identical poll without any votes. Are you sure you want to do this?", "clone", user, state.ActivePollID);
+                    break;
             }
+        }
+
+        private async Task AskForConfirmation(string message, string command, TelegramApiUser user, string pollID)
+        {
+            var confirmationMessage = await api.SendMessageAsync(user.id, message.HtmlSafe(), "HTML", null, null, null, new TelegramApiInlineKeyboardMarkup
+            {
+                inline_keyboard = new TelegramApiInlineKeyboardButton[][] {
+                    new TelegramApiInlineKeyboardButton[] {
+                        new TelegramApiInlineKeyboardButton {
+                            callback_data = $"edit.{pollID}.confirmed-{command}.true",
+                            text = "Yes"
+                        },
+                        new TelegramApiInlineKeyboardButton {
+                            callback_data = $"edit.{pollID}.confirmed-{command}.false",
+                            text = "No"
+                        },
+                    }
+                }
+            });
+            await RunStateActionLockedAsync(user, (state) => state.LastSentConfirmationMessage = confirmationMessage);
+        }
+
+        public async Task CreateNewPollAsync(TelegramApiUser user)
+        {
+            logger.LogInformation($"Creating a new poll for user {user.id}'s.");
+            var sem = lockProvider.GetLockFor($"state-{user.id}");
+            sem.WaitOne();
+            try
+            {
+                logger.LogInformation($"Obtained lock for user {user.id}'s.");
+                // Create a new poll
+                var poll = await pollRepository.SaveAsync(new Poll());
+
+                // Register the poll for the user
+                UserState state = await GetUserStateFor(user);
+                state.State = UserState.States.EditActivePoll;
+                state.ActivePollID = poll.ID;
+                state.OwnedPolls.Add(poll.ID);
+                await userStateRepository.PutStateAsync(user, state);
+            }
+            finally
+            {
+                sem.Release();
+            }
+            await UpdateUserChatSessionForStateAsync(user);
+        }
+
+        public async Task<Poll> ClonePollAsync(TelegramApiUser user, Poll sourcePoll)
+        {
+            logger.LogInformation($"Cloning poll for user {user.id}.");
+
+            if (null == sourcePoll)
+            {
+                sourcePoll = new Poll();
+            }
+
+            Poll result = null;
+            var sem = lockProvider.GetLockFor($"state-{user.id}");
+            sem.WaitOne();
+            try
+            {
+                result = new Poll();
+                result.Subject = sourcePoll.Subject;
+                result.VoteOptions = sourcePoll.VoteOptions.Select(x => new Poll.VoteOption
+                {
+                    Text = x.Text,
+                    Votes = new List<TelegramApiUser>()
+                }).ToList();
+                await pollRepository.SaveAsync(result);
+
+                // Register the poll for the user
+                UserState state = await GetUserStateFor(user);
+                state.State = UserState.States.EditActivePoll;
+                state.ActivePollID = result.ID;
+                state.OwnedPolls.Add(result.ID);
+                await userStateRepository.PutStateAsync(user, state);
+            }
+            finally
+            {
+                sem.Release();
+            }
+            await UpdateUserChatSessionForStateAsync(user);
+            return result;
         }
 
         private async Task AskForVotingOptionToRemove(TelegramApiUser user, UserState state)
@@ -145,10 +230,11 @@ namespace PB.ScheduleBot.StateMachines
                 List<TelegramApiInlineKeyboardButton> options = BuildOptionButtonList(state, poll, "remove-option");
 
                 // send a message 
-                await api.SendMessageAsync(user.id, messageService.EditQueryOptionToRemove(), "HTML", null, null, null, new TelegramApiInlineKeyboardMarkup
+                var sentMessage = await api.SendMessageAsync(user.id, messageService.EditQueryOptionToRemove(), "HTML", null, null, null, new TelegramApiInlineKeyboardMarkup
                 {
                     inline_keyboard = options.Select(x => new TelegramApiInlineKeyboardButton[] { x }).ToArray()
                 });
+                await RegisterPromptAsync(user, sentMessage);
             }
         }
 
@@ -166,10 +252,11 @@ namespace PB.ScheduleBot.StateMachines
                 List<TelegramApiInlineKeyboardButton> options = BuildOptionButtonList(state, poll, "rename-option");
 
                 // send a message 
-                await api.SendMessageAsync(user.id, messageService.EditQueryOptionToRename(), "HTML", null, null, null, new TelegramApiInlineKeyboardMarkup
+                var sentMessage = await api.SendMessageAsync(user.id, messageService.EditQueryOptionToRename(), "HTML", null, null, null, new TelegramApiInlineKeyboardMarkup
                 {
                     inline_keyboard = options.Select(x => new TelegramApiInlineKeyboardButton[] { x }).ToArray()
                 });
+                await RegisterPromptAsync(user, sentMessage);
             }
         }
 
@@ -191,7 +278,7 @@ namespace PB.ScheduleBot.StateMachines
 
         private async Task AskForType(TelegramApiUser user, string pollID)
         {
-            await api.SendMessageAsync(user.id, messageService.EditQueryPollType(), "HTML", null, null, null, new TelegramApiInlineKeyboardMarkup
+            var sentMessage = await api.SendMessageAsync(user.id, messageService.EditQueryPollType(), "HTML", null, null, null, new TelegramApiInlineKeyboardMarkup
             {
                 inline_keyboard = new TelegramApiInlineKeyboardButton[][] {
                     new TelegramApiInlineKeyboardButton[] {
@@ -206,20 +293,25 @@ namespace PB.ScheduleBot.StateMachines
                     }
                 }
             });
+            await RegisterPromptAsync(user, sentMessage);
         }
 
         private async Task AskForSubject(TelegramApiUser user)
         {
-            await api.SendMessageAsync(user.id, messageService.EditQueryPollSubject());
+            var sentMessage = await api.SendMessageAsync(user.id, messageService.EditQueryPollSubject());
+            await RegisterPromptAsync(user, sentMessage);
         }
+
         private async Task AskForPollOptionNewName(TelegramApiUser user)
         {
-            await api.SendMessageAsync(user.id, messageService.EditQueryPollOptionNewName());
+            var sentMessage = await api.SendMessageAsync(user.id, messageService.EditQueryPollOptionNewName());
+            await RegisterPromptAsync(user, sentMessage);
         }
 
         private async Task AskForNewPollOptionName(TelegramApiUser user)
         {
-            await api.SendMessageAsync(user.id, messageService.EditQueryNewPollOptionName());
+            var sentMessage = await api.SendMessageAsync(user.id, messageService.EditQueryNewPollOptionName());
+            await RegisterPromptAsync(user, sentMessage);
         }
 
         public async Task GotoShowListStateAsync(TelegramApiUser user)
@@ -228,6 +320,7 @@ namespace PB.ScheduleBot.StateMachines
             sem.WaitOne();
             try
             {
+                logger.LogInformation($"Obtained lock for user {user.id}'s.");
                 UserState state = await GetUserStateFor(user);
                 state.State = UserState.States.ListOwnedPolls;
                 await userStateRepository.PutStateAsync(user, state);
@@ -236,66 +329,172 @@ namespace PB.ScheduleBot.StateMachines
             {
                 sem.Release();
             }
-            await UpdateUserSessionChatAsync(user);
+            await UpdateUserChatSessionForStateAsync(user);
         }
 
-        public async Task ProcessQueryCallbackAsync(TelegramApiCallbackQuery callback)
+        public async Task ProcessCallbackQueryAsync(TelegramApiCallbackQuery callback)
         {
-            if (callback.data.StartsWith("open."))
-            {
-                bool success = await OpenPoll(callback.from, callback.data.Substring(5));
-                if (success)
-                {
-                    await api.AnswerCallbackQuery(callback.id);
-                }
-                else
-                {
-                    await api.AnswerCallbackQuery(callback.id, "This poll does not exist anymore.", true);
-                }
-                await UpdateUserSessionChatAsync(callback.from);
-            }
-            else if (callback.data.StartsWith("edit."))
-            {
-                string pollID = callback.data.Split('.')[1];
-                string command = callback.data.Split('.')[2];
-                var poll = await pollRepository.LoadAsync(pollID);
-                if (null != poll)
-                {
-                    switch (command)
-                    {
-                        case "subject": await GotoStateAsync(callback.from, UserState.States.EditSubject); break;
-                        case "type": await GotoStateAsync(callback.from, UserState.States.SelectType); break;
-                        case "add-voting-option": await GotoStateAsync(callback.from, UserState.States.AddVotingOption); break;
-                        case "remove-voting-option": await GotoStateAsync(callback.from, UserState.States.RemoveVotingOption); break;
-                        case "rename-voting-option": await GotoStateAsync(callback.from, UserState.States.RenameVotingOption); break;
-                        case "set-type":
-                            await RunPollActionLockedAsync(callback.from, poll.ID, (p) =>
-                            {
-                                if (!int.TryParse(callback.data.Split('.')[3], out int type)) { type = 0; }
-                                p.Type = (Poll.PollType)type;
-                            });
-                            await GotoStateAsync(callback.from, UserState.States.EditActivePoll);
-                            break;
-                        case "remove-option":
-                            await RunPollActionLockedAsync(callback.from, poll.ID, (p) =>
-                            {
-                                string optionID = callback.data.Split('.')[3];
-                                p.VoteOptions.RemoveAll(x => x.ID == optionID);
-                            });
-                            await GotoStateAsync(callback.from, UserState.States.EditActivePoll);
-                            break;
-                        case "rename-option":
-                            await GotoStateAsync(callback.from, UserState.States.AskForPollOptionNewName, (state) => state.ActionData = callback.data.Split('.')[3]);
-                            break;
-                        default: break; // whatever
-                    }
+            await DeletePromptsAsync(callback.from);
+            await DeleteConfirmationMessageIfAnyAsync(callback.from);
 
-                    await api.AnswerCallbackQuery(callback.id);
-                }
-                else
-                {
-                    await api.AnswerCallbackQuery(callback.id, "This poll does not exist anymore.", true);
-                }
+            string source = callback.data.GetQueryPart(0);
+
+            switch (source)
+            {
+                case "open":
+                    await ProcessOpenCallbackQueryAsync(callback);
+                    break;
+                case "edit":
+                    await ProcessEditCallbackQueryAsync(callback);
+                    break;
+                case "list":
+                    await ProcessListCallbackQueryAsync(callback);
+                    break;
+                case "new":
+                    await ProcessNewCallbackQueryAsync(callback);
+                    break;
+                default:
+                    await api.AnswerCallbackQuery(callback.id, "Something went wrong...", true);
+                    logger.LogError($"Callback query '{callback.data}' is not supported.");
+                    break;
+            }
+        }
+
+        private async Task DeleteConfirmationMessageIfAnyAsync(TelegramApiUser from)
+        {
+            var state = await userStateRepository.GetStateAsync(from);
+            if (state.LastSentConfirmationMessage != null)
+            {
+                await RunStateActionLockedAsync(from, x => x.LastSentConfirmationMessage = null);
+                await api.DeleteMessageForChatAsync(from.id, state.LastSentConfirmationMessage.message_id);
+            }
+        }
+
+        private async Task ProcessListCallbackQueryAsync(TelegramApiCallbackQuery callback)
+        {
+            await GotoStateAsync(callback.from, UserState.States.ListOwnedPolls, (state) => state.ActivePollID = null);
+            await api.AnswerCallbackQuery(callback.id);
+        }
+
+        private async Task ProcessNewCallbackQueryAsync(TelegramApiCallbackQuery callback)
+        {
+            await CreateNewPollAsync(callback.from);
+        }
+
+        private async Task ProcessEditCallbackQueryAsync(TelegramApiCallbackQuery callback)
+        {
+            string pollID = callback.data.GetQueryPart(1);
+            string command = callback.data.GetQueryPart(2);
+            var poll = await pollRepository.LoadAsync(pollID);
+            if (null != poll)
+            {
+                await ProcessCallbackQueryForEditing(callback, command, poll);
+
+                await api.AnswerCallbackQuery(callback.id);
+            }
+            else
+            {
+                logger.LogError($"Callback query '{callback.data}' leads to non-existing poll.");
+                await api.AnswerCallbackQuery(callback.id, "This poll does not exist anymore.", true);
+            }
+        }
+
+        private async Task ProcessOpenCallbackQueryAsync(TelegramApiCallbackQuery callback)
+        {
+            string pollID = callback.data.GetQueryPart(1);
+            bool success = await OpenPoll(callback.from, pollID);
+            if (success)
+            {
+                await api.AnswerCallbackQuery(callback.id);
+            }
+            else
+            {
+                await api.AnswerCallbackQuery(callback.id, "This poll does not exist (anymore).", true);
+            }
+            await UpdateUserChatSessionForStateAsync(callback.from);
+        }
+
+        private async Task ProcessCallbackQueryForEditing(TelegramApiCallbackQuery callback, string command, Poll poll)
+        {
+            switch (command)
+            {
+                case "subject": await GotoStateAsync(callback.from, UserState.States.EditSubject); break;
+                case "type": await GotoStateAsync(callback.from, UserState.States.SelectType); break;
+                case "add-voting-option": await GotoStateAsync(callback.from, UserState.States.AddVotingOption); break;
+                case "remove-voting-option": await GotoStateAsync(callback.from, UserState.States.RemoveVotingOption); break;
+                case "rename-voting-option": await GotoStateAsync(callback.from, UserState.States.RenameVotingOption); break;
+                case "delete": await GotoStateAsync(callback.from, UserState.States.DeletePoll); break;
+                case "close": await GotoStateAsync(callback.from, UserState.States.ClosePoll); break;
+                case "clone": await GotoStateAsync(callback.from, UserState.States.ClonePoll); break;
+                case "set-type":
+                    {
+                        string typeString = callback.data.GetQueryPart(3);
+                        await RunPollActionLockedAsync(callback.from, poll.ID, (p) =>
+                        {
+                            if (!int.TryParse(typeString, out int type)) { type = 0; }
+                            p.Type = (Poll.PollType)type;
+                        });
+                        await GotoStateAsync(callback.from, UserState.States.EditActivePoll);
+                    }
+                    break;
+                case "remove-option":
+                    {
+                        string optionID = callback.data.GetQueryPart(3);
+                        await RunPollActionLockedAsync(callback.from, poll.ID, (p) =>
+                        {
+                            p.VoteOptions.RemoveAll(x => x.ID == optionID);
+                        });
+                    }
+                    await GotoStateAsync(callback.from, UserState.States.EditActivePoll);
+                    break;
+                case "rename-option":
+                    {
+                        string optionID = callback.data.GetQueryPart(3);
+                        await GotoStateAsync(callback.from, UserState.States.AskForPollOptionNewName, (state) => state.ActionData = optionID);
+                    }
+                    break;
+                case "confirmed-close":
+                    {
+                        string choice = callback.data.GetQueryPart(3);
+                        await RunPollActionLockedAsync(callback.from, poll.ID, (p) =>
+                        {
+                            if (bool.TryParse(choice, out bool confirmed) && confirmed) { p.IsClosed = true; }
+                        });
+                    }
+                    await GotoStateAsync(callback.from, UserState.States.ListOwnedPolls, (state) => state.ActivePollID = null);
+                    break;
+                case "confirmed-delete":
+                    {
+                        string choice = callback.data.GetQueryPart(3);
+                        await RunPollActionLockedAsync(callback.from, poll.ID, (p) =>
+                        {
+                            if (bool.TryParse(choice, out bool confirmed) && confirmed) { p.IsDeleted = true; }
+                        });
+                        await GotoStateAsync(callback.from, UserState.States.ListOwnedPolls, (state) => state.ActivePollID = null);
+                    }
+                    break;
+                case "confirmed-clone":
+                    {
+                        string choice = callback.data.GetQueryPart(3);
+                        if (bool.TryParse(choice, out bool confirmed) && confirmed)
+                        {
+                            Poll newPoll = await ClonePollAsync(callback.from, poll);
+                            await GotoStateAsync(callback.from, UserState.States.EditActivePoll, (state) => state.ActivePollID = newPoll?.ID);
+                        }
+                        else
+                        {
+                            await GotoStateAsync(callback.from, UserState.States.ListOwnedPolls, (state) => state.ActivePollID = null);
+                        }
+                    }
+                    break;
+                case "reopen":
+                    await RunPollActionLockedAsync(callback.from, poll.ID, (p) =>
+                    {
+                        p.IsClosed = false;
+                    });
+                    await GotoStateAsync(callback.from, UserState.States.ListOwnedPolls, (state) => state.ActivePollID = null);
+                    break;
+                default: break; // whatever
             }
         }
 
@@ -305,6 +504,7 @@ namespace PB.ScheduleBot.StateMachines
             sem.WaitOne();
             try
             {
+                logger.LogInformation($"Obtained lock for user {user.id}'s.");
                 var poll = await pollRepository.LoadAsync(pollID);
                 if (null != poll)
                 {
@@ -331,6 +531,7 @@ namespace PB.ScheduleBot.StateMachines
                 sem.WaitOne();
                 try
                 {
+                    logger.LogInformation($"Obtained lock for user {user.id}'s.");
                     UserState state = await GetUserStateFor(user);
                     state.State = UserState.States.EditActivePoll;
                     state.ActivePollID = id;
@@ -364,99 +565,33 @@ namespace PB.ScheduleBot.StateMachines
             UserState state = await userStateRepository.GetStateAsync(user);
             if (null == state || string.IsNullOrWhiteSpace(state.ActivePollID))
             {
+                // We should not have been in this state...
                 await api.SendMessageAsync(user.id, messageService.ThereIsNoActivePollToEdit());
                 return;
             }
             Poll poll = await pollRepository.LoadAsync(state.ActivePollID);
             if (null == poll)
             {
+                // We should not have been in this state
                 await api.SendMessageAsync(user.id, messageService.ThereIsNoActivePollToEdit());
                 return;
             }
 
-            StringBuilder messageBuilder = new StringBuilder();
+            string messageBuilder = poll.ConstructMessageText();
 
-            messageBuilder.AppendLine($"<b>{HtmlEscape(poll.Subject)}</b>");
-            messageBuilder.AppendLine($"<i>{poll.Type}</i>");
-            messageBuilder.AppendLine($"");
-            if (null == poll.VoteOptions || poll.VoteOptions.Count == 0)
+            TelegramApiInlineKeyboardMarkup markup = poll.ConstructInlineKeyboard();
+            if (null == state.LastSentStateMessage)
             {
-                messageBuilder.AppendLine($"Vote options have not been set up for this poll yet.");
+                var currentMessage = await api.SendMessageAsync(user.id, messageBuilder, "HTML", null, null, null, markup);
+                await RunStateActionLockedAsync(user, st =>
+                {
+                    st.LastSentStateMessage = currentMessage;
+                });
             }
             else
             {
-                foreach (var voteOption in poll.VoteOptions ?? new List<Poll.VoteOption>())
-                {
-                    messageBuilder.AppendLine($"<b>{HtmlEscape(voteOption.Text)} ({voteOption.Votes?.Count ?? 0})</b>");
-                    if (null != voteOption.Votes && voteOption.Votes.Count > 0)
-                    {
-                        foreach (var vote in voteOption.Votes)
-                        {
-                            messageBuilder.AppendLine($" - {ShortName(vote)}");
-                        }
-                        messageBuilder.AppendLine($"");
-                    }
-                    else
-                    {
-                        messageBuilder.AppendLine($"<i>No votes.</i>");
-
-                    }
-                }
+                await api.EditMessageTextAsync(user.id, $"{state.LastSentStateMessage.message_id}", messageBuilder, "HTML", null, markup);
             }
-            messageBuilder.AppendLine($"");
-            messageBuilder.AppendLine($"Votes:");
-            messageBuilder.AppendLine($"<i>{HtmlEscape(poll.ID)}</i>");
-            messageBuilder.AppendLine($"<i>{DateTime.UtcNow.Ticks}</i>");
-            // TODO: ADD BUTTONS TO EDIT THE WRETCHED POLL
-
-            TelegramApiInlineKeyboardMarkup markup = null;
-            if (!poll.IsClosed)
-            {
-                markup = new TelegramApiInlineKeyboardMarkup
-                {
-                    inline_keyboard = new TelegramApiInlineKeyboardButton[][] {
-                        new TelegramApiInlineKeyboardButton[] { new TelegramApiInlineKeyboardButton {
-                            callback_data = $"edit.{poll.ID}.subject",
-                            text = "Edit subject",
-                        } },
-                        new TelegramApiInlineKeyboardButton[] { new TelegramApiInlineKeyboardButton {
-                            callback_data = $"edit.{poll.ID}.type",
-                            text = "Choose type",
-                        } },
-                        new TelegramApiInlineKeyboardButton[] { new TelegramApiInlineKeyboardButton {
-                            callback_data = $"edit.{poll.ID}.add-voting-option",
-                            text = "Add voting option",
-                        } },
-                        new TelegramApiInlineKeyboardButton[] { new TelegramApiInlineKeyboardButton {
-                            callback_data = $"edit.{poll.ID}.remove-voting-option",
-                            text = "Remove voting option",
-                        } },
-                        new TelegramApiInlineKeyboardButton[] { new TelegramApiInlineKeyboardButton {
-                            callback_data = $"edit.{poll.ID}.rename-voting-option",
-                            text = "Rename voting option",
-                        } },
-                    }
-                };
-            }
-            await api.SendMessageAsync(user.id, messageBuilder.ToString(), "HTML", null, null, null, markup);
-        }
-
-        private object ShortName(TelegramApiUser user)
-        {
-            if (!string.IsNullOrWhiteSpace(user.username))
-            {
-                return HtmlEscape(user.username);
-            }
-            else
-            {
-                return HtmlEscape($"{user.first_name} {user.last_name}");
-            }
-        }
-
-        private object HtmlEscape(string subject)
-        {
-            // TODO: IMPLEMENT
-            return subject.Replace("<", "").Replace(">", "");
         }
 
         private async Task ShowPollList(TelegramApiUser user)
@@ -467,7 +602,7 @@ namespace PB.ScheduleBot.StateMachines
             foreach (var id in state?.OwnedPolls ?? new List<string>())
             {
                 Poll poll = await pollRepository.LoadAsync(id);
-                if (null != poll && !poll.IsClosed)
+                if (null != poll && !poll.IsDeleted)
                 {
                     activePolls.Add(poll);
                 }
@@ -475,27 +610,36 @@ namespace PB.ScheduleBot.StateMachines
 
             if (null == state || activePolls.Count == 0)
             {
-                await api.SendMessageAsync(user.id, messageService.YouHaveNoPolls());
+                var sentMessage = await api.SendMessageAsync(user.id, messageService.YouHaveNoPolls());
+                await RegisterPromptAsync(user, sentMessage);
             }
             else
             {
                 List<TelegramApiInlineKeyboardButton[]> rows = new List<TelegramApiInlineKeyboardButton[]>();
                 int i = 1;
-                foreach (var poll in activePolls)
+                foreach (var poll in activePolls.OrderByDescending(x => x.IsClosed).ThenBy(x => x.ModificationDate))
                 {
                     rows.Add(new TelegramApiInlineKeyboardButton[] {
                         new TelegramApiInlineKeyboardButton
                         {
                             callback_data = $"open.{poll.ID}",
-                            text = $"{i++}: {poll.Subject}",
+                            text = $"{i++}: {poll.AsListEntry()}",
                         }
                     });
                 }
+                rows.Add(new TelegramApiInlineKeyboardButton[] {
+                        new TelegramApiInlineKeyboardButton
+                        {
+                            callback_data = $"new",
+                            text = $"➕ Add a new poll",
+                        }
+                    });
                 TelegramApiInlineKeyboardMarkup markup = new TelegramApiInlineKeyboardMarkup
                 {
                     inline_keyboard = rows.ToArray()
                 };
-                await api.SendMessageAsync(user.id, messageService.HereAreYourThisManyPolls(activePolls.Count), "HTML", null, null, null, markup);
+                var sentMessage = await api.SendMessageAsync(user.id, messageService.HereAreYourThisManyPolls(activePolls.Count), "HTML", null, null, null, markup);
+                await RegisterPromptAsync(user, sentMessage);
             }
 
         }
@@ -515,7 +659,43 @@ namespace PB.ScheduleBot.StateMachines
             {
                 sem.Release();
             }
-            await UpdateUserSessionChatAsync(user);
+            await UpdateUserChatSessionForStateAsync(user);
+        }
+
+        public async Task RunStateActionLockedAsync(TelegramApiUser user, Action<UserState> action = null)
+        {
+            var sem = lockProvider.GetLockFor($"state-{user.id}");
+            sem.WaitOne();
+            try
+            {
+                UserState state = await GetUserStateFor(user);
+                if (null != action) action(state);
+                await userStateRepository.PutStateAsync(user, state);
+            }
+            finally
+            {
+                sem.Release();
+            }
+        }
+
+        private async Task DeletePromptsAsync(TelegramApiUser user)
+        {
+            UserState state = await GetUserStateFor(user);
+            foreach (var prompt in state?.RegisteredPrompts ?? new List<TelegramApiMessage>())
+            {
+                await api.DeleteMessageForChatAsync(user.id, prompt.message_id);
+            }
+            await RunStateActionLockedAsync(user, (st) => st.RegisteredPrompts?.Clear());
+        }
+
+        private async Task RegisterPromptAsync(TelegramApiUser user, TelegramApiMessage message)
+        {
+            await RunStateActionLockedAsync(user, (st) =>
+            {
+                if (null == st.RegisteredPrompts) st.RegisteredPrompts = new List<TelegramApiMessage>();
+                st.RegisteredPrompts.Add(message);
+            });
+
         }
 
     }

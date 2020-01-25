@@ -6,9 +6,10 @@ namespace PB.ScheduleBot.StateMachines
     public interface IUserSessionStateMachine
     {
         Task CreateNewPollAsync(TelegramApiUser user);
-        Task ProcessTextInputAsync(TelegramApiUser user, string message);
-        Task UpdateUserSessionChatAsync(TelegramApiUser user);
+        Task ProcessTextInputAsync(TelegramApiUser user, long messageID, string message);
+        Task UpdateUserChatSessionForStateAsync(TelegramApiUser user);
         Task GotoShowListStateAsync(TelegramApiUser user);
-        Task ProcessQueryCallbackAsync(TelegramApiCallbackQuery callback);
+        Task ProcessCallbackQueryAsync(TelegramApiCallbackQuery callback);
+        Task ResetPrivateMessageHistory(TelegramApiUser user);
     }
 }

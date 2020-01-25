@@ -48,10 +48,10 @@ namespace PB.ScheduleBot.Commands.UpdateProcessors
             logger.LogInformation($"Processing command {commandText}");
             switch (commandText)
             {
-                case "/start":
                 case "/new":
                     await sessionStateMachine.CreateNewPollAsync(message.from);
                     break;
+                case "/start":
                 case "/help":
                     await ShowHelp(message.from);
                     break;
@@ -59,17 +59,19 @@ namespace PB.ScheduleBot.Commands.UpdateProcessors
                     await sessionStateMachine.GotoShowListStateAsync(message.from);
                     break;
                 case "/refresh":
-                    await sessionStateMachine.UpdateUserSessionChatAsync(message.from);
+                    await sessionStateMachine.UpdateUserChatSessionForStateAsync(message.from);
                     break;
                 default:
                     await api.SendMessageAsync(message.chat.id, messageService.CommandNotSupported(commandText));
                     break;
             }
+            // on any command, forget that we were editing messages
+            await sessionStateMachine.ResetPrivateMessageHistory(message.from);
         }
 
         private async Task ProcessTextInput(TelegramApiMessage message)
         {
-            await sessionStateMachine.ProcessTextInputAsync(message.from, message.text);
+            await sessionStateMachine.ProcessTextInputAsync(message.from, message.message_id, message.text);
         }
 
         private async Task ShowHelp(TelegramApiUser from)

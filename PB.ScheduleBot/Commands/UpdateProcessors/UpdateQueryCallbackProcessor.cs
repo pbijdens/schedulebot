@@ -13,19 +13,30 @@ namespace PB.ScheduleBot.Commands.UpdateProcessors
         private readonly ILogger logger;
         private readonly ITelegramAPI api;
         private readonly IUserSessionStateMachine userSessionStateMachine;
+        private readonly IVotingEngine votingEngine;
 
         public UpdateQueryCallbackProcessor(ILogger logger, 
             ITelegramAPI api,
-            IUserSessionStateMachine userSessionStateMachine)
+            IUserSessionStateMachine userSessionStateMachine,
+            IVotingEngine votingEngine)
         {
             this.logger = logger;
             this.api = api;
             this.userSessionStateMachine = userSessionStateMachine;
+            this.votingEngine = votingEngine;
         }
 
         public async Task RunAsync(TelegramApiCallbackQuery callback)
         {
-            await userSessionStateMachine.ProcessQueryCallbackAsync(callback);
+            if (!string.IsNullOrEmpty(callback.inline_message_id))
+            {
+                await votingEngine.ProcessCallbackQueryAsync(callback);
+                await api.AnswerCallbackQuery(callback.id);
+            }
+            else
+            {
+                await userSessionStateMachine.ProcessCallbackQueryAsync(callback);
+            }
         }
     }
 }

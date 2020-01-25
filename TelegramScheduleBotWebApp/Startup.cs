@@ -45,6 +45,7 @@ namespace TelegramScheduleBotWebApp
             services.AddTransient<IUpdateInlineQueryProcessor, UpdateInlineQueryProcessor>();
             services.AddTransient<IMessageService, MessageService>();
             services.AddTransient<IUserSessionStateMachine, UserSessionStateMachine>();
+            services.AddSingleton<IVotingEngine, VotingEngine>();
 
             // Handlers for Telegram updates
             services.AddTransient<ICommandUpdate, CommandUpdate>();
